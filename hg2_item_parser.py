@@ -172,6 +172,166 @@ class HG2ItemParser:
         return pet_properties
 
     @classmethod
+    def _parse_item_skills_max_break_values(cls, item_data: dict) -> list[list[float]]:
+        if item_data['Category'] == 'pet':
+            item_skills_max_break_values = cls._parse_pet_skills_max_break_values(
+                item_data)
+        else:
+            item_skills_max_break_values = cls._parse_not_pet_skills_max_break_values(
+                item_data)
+
+        return item_skills_max_break_values
+
+    @classmethod
+    def _parse_pet_skills_max_break_values(cls, item_data: dict) -> list[list[float]]:
+        pet_skills_max_break_values = []
+        pet_skills_data = cls._parse_pet_skills_data(item_data)
+        pet_skills_max_lvl_values = cls._parse_pet_skills_max_lvl_values(
+            item_data)
+
+        for i, pet_skill_data in enumerate(pet_skills_data):
+            pet_skill_max_break_values = []
+            for j in range(1, 7):
+                pet_skill_max_lvl_value = pet_skills_max_lvl_values[i][j-1]
+                pet_skill_max_lvl = int(pet_skill_data[f'Maxlevel'])
+                pet_skill_add = float(pet_skill_data[f'Para{j}SkillUpAdd'])
+                pet_skill_max_break_values.append(
+                    pet_skill_max_lvl_value + pet_skill_add * pet_skill_max_lvl)
+            pet_skills_max_break_values.append(pet_skill_max_break_values)
+
+        return pet_skills_max_break_values
+
+    @classmethod
+    def _parse_not_pet_skills_max_break_values(cls, item_data: dict) -> list[list[float]]:
+        item_skills_max_break_values = []
+        item_skills_data = cls._parse_not_pet_skills_data(item_data)
+        item_skills_max_lvl_values = cls._parse_not_pet_skills_max_lvl_values(
+            item_data)
+
+        for i, item_skill_data in enumerate(item_skills_data):
+            item_skill_slots_amount = int(item_skill_data['SlotCount'])
+            item_skill_slots_equip: list[str] = [item_skill_data[f'Slot{j}Equips'] 
+                                                 for j in range(1, item_skill_slots_amount + 1)]
+
+            for skill_slot_used, skill_slot_equip in enumerate(item_skill_slots_equip, start=1):
+                if str(item_data['DisplayNumber']) in skill_slot_equip.split(';'):
+                    break
+            else:
+                skill_slot_used = 1
+
+            item_skill_max_break_values = []
+            for j in range(1, 6):
+                item_skill_max_lvl_value = item_skills_max_lvl_values[i][j-1]
+                item_skill_slot_add = float(
+                    item_skill_data[f'Slot{skill_slot_used}Para{j}Add'])
+                item_skill_slot_max_lvl = float(
+                    item_skill_data[f'Slot{skill_slot_used}MaxLevel'])
+                item_skill_max_break_values.append(
+                    item_skill_max_lvl_value + item_skill_slot_add * item_skill_slot_max_lvl)
+
+            item_skills_max_break_values.append(item_skill_max_break_values)
+
+        return item_skills_max_break_values
+
+    @classmethod
+    def _parse_item_skills_max_lvl_values(cls, item_data: dict) -> list[list[float]]:
+        if item_data['Category'] == 'pet':
+            item_skills_max_lvl_values = cls._parse_pet_skills_max_lvl_values(
+                item_data)
+        else:
+            item_skills_max_lvl_values = cls._parse_not_pet_skills_max_lvl_values(
+                item_data)
+
+        return item_skills_max_lvl_values
+
+    @classmethod
+    def _parse_pet_skills_max_lvl_values(cls, item_data: dict) -> list[list[float]]:
+        pet_skills_max_lvl_values = []
+        pet_skills_data = cls._parse_pet_skills_data(item_data)
+
+        for pet_skill_data in pet_skills_data:
+            pet_skill_max_lvl_values = []
+            for j in range(1, 7):
+                pet_skill_max_lvl_value = float(pet_skill_data[f'Para{j}'])
+                pet_skill_max_lvl_values.append(pet_skill_max_lvl_value)
+            pet_skills_max_lvl_values.append(pet_skill_max_lvl_values)
+
+        return pet_skills_max_lvl_values
+
+    @staticmethod
+    def _parse_not_pet_skills_max_lvl_values(item_data: dict) -> list[list[float]]:
+        item_skills_max_lvl_values = []
+        item_skills_amount = int(item_data['NumProps'])
+        item_max_lvl = int(item_data['MaxLv'])
+
+        item_skills_range = list(range(1, item_skills_amount + 1))
+        if int(item_data['DisplayNumber']) in FANTASY_LEGEND_IDS:
+            item_skills_range += [6, 7]
+
+        for i in item_skills_range:
+            item_skill_max_lvl_values = []
+            for j in range(1, 6):
+                item_skill_value = float(item_data[f'Prop{i}Param{j}'])
+                item_skill_value_add = float(item_data[f'Prop{i}Param{j}Add'])
+                item_skill_max_lvl_value = item_skill_value + \
+                    item_skill_value_add * (item_max_lvl - 1)
+                item_skill_max_lvl_values.append(item_skill_max_lvl_value)
+            item_skills_max_lvl_values.append(item_skill_max_lvl_values)
+
+        return item_skills_max_lvl_values
+
+    @classmethod
+    def _parse_item_skills_description(cls, item_data: dict) -> list[str]:
+        item_skills_description = []
+        item_skills_data = cls._parse_item_skills_data(item_data)
+        item_skills_max_lvl_values = cls._parse_item_skills_max_lvl_values(
+            item_data)
+        item_skills_max_break_values = cls._parse_item_skills_max_break_values(
+            item_data)
+
+        for i, item_skill_data in enumerate(item_skills_data):
+            item_skill_description_template_id = int(
+                item_skill_data['DisplayDescription'].replace('TEXT', ''))
+            item_skill_description_template = cls._parse_text(
+                item_skill_description_template_id)
+            item_skill_description = cls._fill_item_skill_description_template(
+                item_skill_description_template, item_skills_max_lvl_values[i], item_skills_max_break_values[i])
+            item_skills_description.append(item_skill_description)
+
+        return item_skills_description
+
+    @staticmethod
+    def _fill_item_skill_description_template(item_skill_description_template: str, item_skill_max_lvl_values: list[float], item_skill_max_break_values: list[float]) -> str:
+        item_skill_description = re.sub(
+            r'# ?!?ALB ?\(\d+\)', '', item_skill_description_template)
+        item_skill_description = item_skill_description.replace('#n', '')
+        item_skill_description = item_skill_description.replace(' %', '%')
+
+        for i, item_skill_max_lvl_value, item_skill_max_break_value in zip(range(1, 7), item_skill_max_lvl_values, item_skill_max_break_values):
+            if f'#{i}%' in item_skill_description:
+                item_skill_max_lvl_value *= 100
+                item_skill_max_break_value *= 100
+
+            match = re.search(fr'([1-9]+)#{i}', item_skill_description)
+            if match is not None:
+                mul = int(match.group(1))
+                item_skill_max_lvl_value *= mul
+                item_skill_max_break_value *= mul
+            else:
+                mul = ''
+
+            item_skill_fill_value = f'{item_skill_max_lvl_value:g}'
+            if item_skill_max_lvl_value != item_skill_max_break_value:
+                item_skill_fill_value += f'({item_skill_max_break_value:g})'
+
+            item_skill_description = item_skill_description.replace(
+                f'{mul}#{i}', item_skill_fill_value)
+
+        item_skill_description = item_skill_description.strip()
+
+        return item_skill_description
+
+    @classmethod
     def _parse_item_skills_data(cls, item_data: dict) -> list[dict]:
         if item_data['Category'] == 'pet':
             item_skills_data = cls._parse_pet_skills_data(item_data)
@@ -238,7 +398,7 @@ class HG2ItemParser:
         item_skills_amount = int(item_data['NumProps'])
         item_skills_id = [int(item_data[f'Prop{i}id'])
                           for i in range(1, item_skills_amount + 1)]
-        if item_data['DisplayNumber'] in FANTASY_LEGEND_IDS:
+        if int(item_data['DisplayNumber']) in FANTASY_LEGEND_IDS:
             item_skills_id.append(int(item_data[f'Prop6id']))
             item_skills_id.append(int(item_data[f'Prop7id']))
 
@@ -250,166 +410,6 @@ class HG2ItemParser:
         items_skills_data = CSVReader(
             f'{_current_folder}/data/{server}/{filename}', delimiter='\t')
         cls._cached_items_skills_data[server][category] = items_skills_data
-
-    @classmethod
-    def _parse_item_skills_max_break_values(cls, item_data: dict) -> list[list[float]]:
-        if item_data['Category'] == 'pet':
-            item_skills_max_break_values = cls._parse_pet_skills_max_break_values(
-                item_data)
-        else:
-            item_skills_max_break_values = cls._parse_not_pet_skills_max_break_values(
-                item_data)
-
-        return item_skills_max_break_values
-
-    @classmethod
-    def _parse_pet_skills_max_break_values(cls, item_data: dict) -> list[list[float]]:
-        pet_skills_max_break_values = []
-        pet_skills_data = cls._parse_pet_skills_data(item_data)
-        pet_skills_max_lvl_values = cls._parse_pet_skills_max_lvl_values(
-            item_data)
-
-        for i, pet_skill_data in enumerate(pet_skills_data):
-            pet_skill_max_break_values = []
-            for j in range(1, 7):
-                pet_skill_max_lvl_value = pet_skills_max_lvl_values[i][j-1]
-                pet_skill_max_lvl = int(pet_skill_data[f'Maxlevel'])
-                pet_skill_add = float(pet_skill_data[f'Para{j}SkillUpAdd'])
-                pet_skill_max_break_values.append(
-                    pet_skill_max_lvl_value + pet_skill_add * pet_skill_max_lvl)
-            pet_skills_max_break_values.append(pet_skill_max_break_values)
-
-        return pet_skills_max_break_values
-
-    @classmethod
-    def _parse_not_pet_skills_max_break_values(cls, item_data: dict) -> list[list[float]]:
-        item_skills_max_break_values = []
-        item_skills_data = cls._parse_not_pet_skills_data(item_data)
-        item_skills_max_lvl_values = cls._parse_not_pet_skills_max_lvl_values(
-            item_data)
-
-        for i, item_skill_data in enumerate(item_skills_data):
-            item_skill_slots_amount = int(item_skill_data['SlotCount'])
-            item_skill_slots_equip: list[str] = [item_skill_data[f'Slot{
-                j}Equips'] for j in range(1, item_skill_slots_amount + 1)]
-
-            for skill_slot_used, skill_slot_equip in enumerate(item_skill_slots_equip, start=1):
-                if str(item_data['DisplayNumber']) in skill_slot_equip.split(';'):
-                    break
-            else:
-                skill_slot_used = 1
-
-            item_skill_max_break_values = []
-            for j in range(1, 6):
-                item_skill_max_lvl_value = item_skills_max_lvl_values[i][j-1]
-                item_skill_slot_add = float(
-                    item_skill_data[f'Slot{skill_slot_used}Para{j}Add'])
-                item_skill_slot_max_lvl = float(
-                    item_skill_data[f'Slot{skill_slot_used}MaxLevel'])
-                item_skill_max_break_values.append(
-                    item_skill_max_lvl_value + item_skill_slot_add * item_skill_slot_max_lvl)
-
-            item_skills_max_break_values.append(item_skill_max_break_values)
-
-        return item_skills_max_break_values
-
-    @classmethod
-    def _parse_item_skills_max_lvl_values(cls, item_data: dict) -> list[list[float]]:
-        if item_data['Category'] == 'pet':
-            item_skills_max_lvl_values = cls._parse_pet_skills_max_lvl_values(
-                item_data)
-        else:
-            item_skills_max_lvl_values = cls._parse_not_pet_skills_max_lvl_values(
-                item_data)
-
-        return item_skills_max_lvl_values
-
-    @classmethod
-    def _parse_pet_skills_max_lvl_values(cls, item_data: dict) -> list[list[float]]:
-        pet_skills_max_lvl_values = []
-        pet_skills_data = cls._parse_pet_skills_data(item_data)
-
-        for pet_skill_data in pet_skills_data:
-            pet_skill_max_lvl_values = []
-            for j in range(1, 7):
-                pet_skill_max_lvl_value = float(pet_skill_data[f'Para{j}'])
-                pet_skill_max_lvl_values.append(pet_skill_max_lvl_value)
-            pet_skills_max_lvl_values.append(pet_skill_max_lvl_values)
-
-        return pet_skills_max_lvl_values
-
-    @staticmethod
-    def _parse_not_pet_skills_max_lvl_values(item_data: dict) -> list[list[float]]:
-        item_skills_max_lvl_values = []
-        item_skills_amount = int(item_data['NumProps'])
-        item_max_lvl = int(item_data['MaxLv'])
-
-        item_skills_range = list(range(1, item_skills_amount + 1))
-        if item_data['DisplayNumber'] in FANTASY_LEGEND_IDS:
-            item_skills_range += [6, 7]
-
-        for i in item_skills_range:
-            item_skill_max_lvl_values = []
-            for j in range(1, 6):
-                item_skill_value = float(item_data[f'Prop{i}Param{j}'])
-                item_skill_value_add = float(item_data[f'Prop{i}Param{j}Add'])
-                item_skill_max_lvl_value = item_skill_value + \
-                    item_skill_value_add * (item_max_lvl - 1)
-                item_skill_max_lvl_values.append(item_skill_max_lvl_value)
-            item_skills_max_lvl_values.append(item_skill_max_lvl_values)
-
-        return item_skills_max_lvl_values
-
-    @classmethod
-    def _parse_item_skills_description(cls, item_data: dict) -> list[str]:
-        item_skills_description = []
-        item_skills_data = cls._parse_item_skills_data(item_data)
-        item_skills_max_lvl_values = cls._parse_item_skills_max_lvl_values(
-            item_data)
-        item_skills_max_break_values = cls._parse_item_skills_max_break_values(
-            item_data)
-
-        for i, item_skill_data in enumerate(item_skills_data):
-            item_skill_description_template_id = int(
-                item_skill_data['DisplayDescription'].replace('TEXT', ''))
-            item_skill_description_template = cls._parse_text(
-                item_skill_description_template_id)
-            item_skill_description = cls._fill_item_skill_description_template(
-                item_skill_description_template, item_skills_max_lvl_values[i], item_skills_max_break_values[i])
-            item_skills_description.append(item_skill_description)
-
-        return item_skills_description
-
-    @staticmethod
-    def _fill_item_skill_description_template(item_skill_description_template: str, item_skill_max_lvl_values: list[float], item_skill_max_break_values: list[float]) -> str:
-        item_skill_description = re.sub(
-            r'# ?!?ALB ?\(\d+\)', '', item_skill_description_template)
-        item_skill_description = item_skill_description.replace('#n', '')
-        item_skill_description = item_skill_description.replace(' %', '%')
-
-        for i, item_skill_max_lvl_value, item_skill_max_break_value in zip(range(1, 7), item_skill_max_lvl_values, item_skill_max_break_values):
-            if f'#{i}%' in item_skill_description:
-                item_skill_max_lvl_value *= 100
-                item_skill_max_break_value *= 100
-
-            match = re.search(fr'([1-9]+)#{i}', item_skill_description)
-            if match is not None:
-                mul = int(match.group(1))
-                item_skill_max_lvl_value *= mul
-                item_skill_max_break_value *= mul
-            else:
-                mul = ''
-
-            item_skill_fill_value = f'{item_skill_max_lvl_value:g}'
-            if item_skill_max_lvl_value != item_skill_max_break_value:
-                item_skill_fill_value += f'({item_skill_max_break_value:g})'
-
-            item_skill_description = item_skill_description.replace(
-                f'{mul}#{i}', item_skill_fill_value)
-
-        item_skill_description = item_skill_description.strip()
-
-        return item_skill_description
 
     @classmethod
     def _search_item_data(cls, item_id: int) -> dict | None:

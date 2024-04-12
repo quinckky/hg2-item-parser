@@ -1,12 +1,10 @@
-import contextlib
-import re
 import os
+import re
 from typing import Literal
 
 import requests
 
 from .constants import *
-from .exceptions import *
 from .utils.csvreader import CSVReader
 from .utils.csvreader.exceptions import *
 
@@ -14,7 +12,7 @@ Server = Literal['JP', 'CN']
 ItemCategory = Literal['weapon', 'costume', 'badge', 'pet']
 SkillCategory = Literal['pet', 'not_pet']
 ItemAttrs = Literal['ID', 'Title ID', 'Title', 'Icon ID', 'Icon URL', 'Damage Type', 'Rarity']
-ItemSkillAttrs = Literal['ID', 'Damage Type', 'Title ID', 'Title', 'Description Template ID', 'Description Tempalte', 'Description']
+ItemSkillAttrs = Literal['ID', 'Damage Type', 'Title ID', 'Title', 'Description Template ID', 'Description Template', 'Description']
 
 _current_folder = os.path.dirname(__file__)
 
@@ -34,7 +32,7 @@ class HG2ItemParser:
     }
 
     @classmethod
-    def parse_item_all(cls, item_id: int) -> tuple[dict, dict, list[dict]]:
+    def parse_item_all(cls, item_id: int) -> tuple[dict, dict, list[dict]] | tuple[None]:
         item_main_info = cls.parse_item_main_info(item_id)
         item_properties = cls.parse_item_properties(item_id)
         item_skills = cls.parse_item_skills(item_id)
@@ -42,9 +40,11 @@ class HG2ItemParser:
         return item_main_info, item_properties, item_skills
 
     @classmethod
-    def parse_item_main_info(cls, item_id: int) -> dict[ItemAttrs, str | int]:
+    def parse_item_main_info(cls, item_id: int) -> dict[ItemAttrs, str | int] | None:
         item_main_info = dict()
         item_data = cls._search_item_data(item_id)
+        if item_data is None:
+            return None
 
         item_main_info['ID'] = item_id
 
@@ -66,10 +66,12 @@ class HG2ItemParser:
         return item_main_info
 
     @classmethod
-    def parse_item_properties(cls, item_id: int) -> dict[str, str | int | float]:
+    def parse_item_properties(cls, item_id: int) -> dict[str, str | int | float] | None:
         item_properties = dict()
         item_data = cls._search_item_data(item_id)
-
+        if item_data is None:
+            return None
+        
         match item_data['Category']:
             case 'weapon':
                 item_properties = cls._parse_weapon_properties(item_data)
@@ -86,9 +88,12 @@ class HG2ItemParser:
         return item_properties
 
     @classmethod
-    def parse_item_skills(cls, item_id: int) -> list[dict[ItemSkillAttrs, str | int]]:
+    def parse_item_skills(cls, item_id: int) -> list[dict[ItemSkillAttrs, str | int]] | None:
         item_skills = []
         item_data = cls._search_item_data(item_id)
+        if item_data is None:
+            return None
+        
         item_skills_data = cls._parse_item_skills_data(item_data)
         item_skills_description = cls._parse_item_skills_description(item_data)
 
@@ -192,7 +197,7 @@ class HG2ItemParser:
                 pet_skills_data.append(pet_skill)
 
             except RowNotFoundError:
-                raise ItemSkillNotFoundError(pet_skill_id)
+                pass
 
         return pet_skills_data
 
@@ -200,21 +205,22 @@ class HG2ItemParser:
     def _parse_not_pet_skills_data(cls, item_data: dict) -> list[dict]:
         item_skills_data = []
         item_skills_id = cls._parse_not_pet_skills_id(item_data)
-        for item_skill_id in item_skills_id[:]:
-            try:
-                items_skills_data = cls._cached_items_skills_data[item_data['Server']]['not_pet']
-            except KeyError:
-                cls._cache_items_skills_data(item_data['Server'], 'not_pet')
-                items_skills_data = cls._cached_items_skills_data[item_data['Server']]['not_pet']
+        try:
+            items_skills_data = cls._cached_items_skills_data[item_data['Server']]['not_pet']
+        except KeyError:
+            cls._cache_items_skills_data(item_data['Server'], 'not_pet')
+            items_skills_data = cls._cached_items_skills_data[item_data['Server']]['not_pet']
+
+        for item_skill_id in item_skills_id:
             try:
                 item_skill_data = items_skills_data.get_row(
                     'ID', item_skill_id)
                 if item_skill_data['DisplayTitle'] == '0':
-                    raise ItemSkillNotFoundError(item_skill_id)
+                    continue
                 item_skills_data.append(item_skill_data)
 
             except RowNotFoundError:
-                item_skills_id.remove(item_skill_id)
+                pass
 
         return item_skills_data
 
@@ -406,17 +412,16 @@ class HG2ItemParser:
         return item_skill_description
 
     @classmethod
-    def _search_item_data(cls, item_id: int) -> dict:
+    def _search_item_data(cls, item_id: int) -> dict | None:
         for category in ('weapon', 'costume', 'badge', 'pet'):
             for server in ('JP', 'CN'):
-                with contextlib.suppress(ItemNotFoundError):
-                    item_data = cls._parse_item_data(item_id, server, category)
+                item_data = cls._parse_item_data(item_id, server, category)
+                if item_data is not None:
                     return item_data
-
-        raise ItemNotFoundError(item_id)
+                
 
     @classmethod
-    def _parse_item_data(cls, item_id: int, server: Server, category: ItemCategory) -> dict:
+    def _parse_item_data(cls, item_id: int, server: Server, category: ItemCategory) -> dict | None:
         try:
             items_data = cls._cached_items_data[server][category]
         except KeyError:
@@ -428,7 +433,7 @@ class HG2ItemParser:
             item_data['Server'] = server
             item_data['Category'] = category
         except RowNotFoundError:
-            raise ItemNotFoundError(item_id)
+            return None
 
         return item_data
 

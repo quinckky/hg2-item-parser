@@ -100,7 +100,8 @@ class HG2ItemParser:
         for item_skill_data, item_skill_description in zip(item_skills_data, item_skills_description):
             item_skill = dict()
             item_skill['ID'] = int(item_skill_data['ID'])
-            item_skill['Damage Type'] = DAMAGE_TYPE_NAMES[item_skill_data['Feature']]
+            item_skill_damage_type = item_skill_data.get('Feature', 'none')
+            item_skill['Damage Type'] = DAMAGE_TYPE_NAMES[item_skill_damage_type]
             item_skill_title_id = item_skill['Title ID'] = int(
                 item_skill_data['DisplayTitle'].replace('TEXT', ''))
             item_skill['Title'] = cls._parse_text(item_skill_title_id)
@@ -193,7 +194,6 @@ class HG2ItemParser:
 
             try:
                 pet_skill = pets_skills_data.get_row('ID', pet_skill_id)
-                pet_skill['Feature'] = None
                 pet_skills_data.append(pet_skill)
 
             except RowNotFoundError:
